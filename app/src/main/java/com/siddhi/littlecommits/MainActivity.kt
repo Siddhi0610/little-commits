@@ -1,7 +1,5 @@
 package com.siddhi.littlecommits
 
-import com.google.firebase.firestore.FirebaseFirestore
-import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -20,14 +18,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -42,7 +42,7 @@ class MainActivity : ComponentActivity() {
                 Surface(
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    LittleCommitsScreen(this)
+                    LittleCommitsScreen()
                 }
             }
         }
@@ -50,9 +50,11 @@ class MainActivity : ComponentActivity() {
 }
 
 @androidx.compose.runtime.Composable
-fun LittleCommitsScreen(context: Context) {
+fun LittleCommitsScreen() {
 
-    val db = FirebaseFirestore.getInstance()
+    val db = remember {
+        FirebaseFirestore.getInstance()
+    }
 
     var messageText by remember {
         mutableStateOf("")
@@ -62,43 +64,62 @@ fun LittleCommitsScreen(context: Context) {
         mutableStateListOf<Message>()
     }
 
-    val preferences = remember {
-        context.getSharedPreferences(
-            "little_commits",
-            Context.MODE_PRIVATE
-        )
-    }
-
     val today = SimpleDateFormat(
         "MMMM dd, yyyy",
         Locale.getDefault()
     ).format(Date())
 
-    // Load saved messages when the screen starts
-    LaunchedEffect(Unit) {
+    /*
+     * Listen to Firestore.
+     *
+     * Whenever messages change in Firebase,
+     * this list automatically updates.
+     */
+    DisposableEffect(Unit) {
 
-        val savedMessages = preferences.getStringSet(
-            "messages",
-            emptySet()
-        ) ?: emptySet()
+        val listener = db.collection("messages")
+            .orderBy("timestamp", Query.Direction.DESCENDING)
+            .addSnapshotListener { snapshot, error ->
 
-        messages.clear()
+                if (error != null) {
 
-        savedMessages.forEach { savedMessage ->
+                    println("FIREBASE ERROR: ${error.message}")
 
-            val parts = savedMessage.split("|||")
+                    return@addSnapshotListener
+                }
 
-            if (parts.size == 2) {
+                if (snapshot != null) {
 
-                messages.add(
-                    Message(
-                        text = parts[0],
-                        date = parts[1]
+                    println(
+                        "FIREBASE SUCCESS: ${snapshot.documents.size} documents"
                     )
-                )
+
+                    messages.clear()
+
+                    for (document in snapshot.documents) {
+
+                        println(
+                            "DOCUMENT: ${document.data}"
+                        )
+
+                        val text = document.getString("text") ?: ""
+                        val date = document.getString("date") ?: ""
+
+                        messages.add(
+                            Message(
+                                text = text,
+                                date = date
+                            )
+                        )
+                    }
+                }
             }
+
+        onDispose {
+            listener.remove()
         }
     }
+
 
     Column(
         modifier = Modifier
