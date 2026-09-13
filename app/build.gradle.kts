@@ -37,6 +37,8 @@ android {
 }
 
 dependencies {
+    implementation("androidx.glance:glance:1.2.0")
+    implementation("androidx.glance:glance-appwidget:1.2.0")
     implementation(platform("com.google.firebase:firebase-bom:34.2.0"))
     implementation("com.google.firebase:firebase-firestore")
     implementation(platform(libs.androidx.compose.bom))

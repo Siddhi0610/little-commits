@@ -120,7 +120,6 @@ fun LittleCommitsScreen() {
         }
     }
 
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -190,6 +189,24 @@ fun LittleCommitsScreen() {
             text = "Today's commits: ${
                 messages.count { it.date == today }
             }",
+            style = MaterialTheme.typography.titleMedium
+        )
+
+        Spacer(
+            modifier = Modifier.height(24.dp)
+        )
+
+        // Contribution graph
+        CommitGrid(
+            messages = messages
+        )
+
+        Spacer(
+            modifier = Modifier.height(24.dp)
+        )
+
+        Text(
+            text = "All messages",
             style = MaterialTheme.typography.titleMedium
         )
 
