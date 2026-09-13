@@ -1,5 +1,6 @@
 package com.siddhi.littlecommits
 
+import com.google.firebase.firestore.FirebaseFirestore
 import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -50,6 +51,8 @@ class MainActivity : ComponentActivity() {
 
 @androidx.compose.runtime.Composable
 fun LittleCommitsScreen(context: Context) {
+
+    val db = FirebaseFirestore.getInstance()
 
     var messageText by remember {
         mutableStateOf("")
@@ -141,24 +144,14 @@ fun LittleCommitsScreen(context: Context) {
 
                 if (messageText.isNotBlank()) {
 
-                    val newMessage = Message(
-                        text = messageText,
-                        date = today
+                    val newMessage = hashMapOf(
+                        "text" to messageText,
+                        "date" to today,
+                        "timestamp" to System.currentTimeMillis()
                     )
 
-                    messages.add(newMessage)
-
-                    // Save all messages
-                    val savedMessages = messages.map {
-                        "${it.text}|||${it.date}"
-                    }.toSet()
-
-                    preferences.edit()
-                        .putStringSet(
-                            "messages",
-                            savedMessages
-                        )
-                        .apply()
+                    db.collection("messages")
+                        .add(newMessage)
 
                     messageText = ""
                 }
