@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "146774169291",
+    "project_id": "little-commits",
+    "storage_bucket": "little-commits.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:146774169291:android:e15c4f21f7a9f788dc2d4e",
+        "android_client_info": {
+          "package_name": "com.siddhi.littlecommits"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCdbB-GAL8nOAprCWeO7dOlI_e9yVZTaLI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
