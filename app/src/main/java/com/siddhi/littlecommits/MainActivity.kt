@@ -1,5 +1,6 @@
 package com.siddhi.littlecommits
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -18,11 +19,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import java.text.SimpleDateFormat
@@ -39,7 +41,7 @@ class MainActivity : ComponentActivity() {
                 Surface(
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    LittleCommitsScreen()
+                    LittleCommitsScreen(this)
                 }
             }
         }
@@ -47,7 +49,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @androidx.compose.runtime.Composable
-fun LittleCommitsScreen() {
+fun LittleCommitsScreen(context: Context) {
 
     var messageText by remember {
         mutableStateOf("")
@@ -57,10 +59,43 @@ fun LittleCommitsScreen() {
         mutableStateListOf<Message>()
     }
 
+    val preferences = remember {
+        context.getSharedPreferences(
+            "little_commits",
+            Context.MODE_PRIVATE
+        )
+    }
+
     val today = SimpleDateFormat(
         "MMMM dd, yyyy",
         Locale.getDefault()
     ).format(Date())
+
+    // Load saved messages when the screen starts
+    LaunchedEffect(Unit) {
+
+        val savedMessages = preferences.getStringSet(
+            "messages",
+            emptySet()
+        ) ?: emptySet()
+
+        messages.clear()
+
+        savedMessages.forEach { savedMessage ->
+
+            val parts = savedMessage.split("|||")
+
+            if (parts.size == 2) {
+
+                messages.add(
+                    Message(
+                        text = parts[0],
+                        date = parts[1]
+                    )
+                )
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -106,12 +141,24 @@ fun LittleCommitsScreen() {
 
                 if (messageText.isNotBlank()) {
 
-                    messages.add(
-                        Message(
-                            text = messageText,
-                            date = today
-                        )
+                    val newMessage = Message(
+                        text = messageText,
+                        date = today
                     )
+
+                    messages.add(newMessage)
+
+                    // Save all messages
+                    val savedMessages = messages.map {
+                        "${it.text}|||${it.date}"
+                    }.toSet()
+
+                    preferences.edit()
+                        .putStringSet(
+                            "messages",
+                            savedMessages
+                        )
+                        .apply()
 
                     messageText = ""
                 }
@@ -126,7 +173,9 @@ fun LittleCommitsScreen() {
         )
 
         Text(
-            text = "Today's commits: ${messages.size}",
+            text = "Today's commits: ${
+                messages.count { it.date == today }
+            }",
             style = MaterialTheme.typography.titleMedium
         )
 
