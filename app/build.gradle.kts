@@ -37,6 +37,7 @@ android {
 }
 
 dependencies {
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
     implementation("androidx.glance:glance:1.2.0")
     implementation("androidx.glance:glance-appwidget:1.2.0")
     implementation(platform("com.google.firebase:firebase-bom:34.2.0"))
