@@ -9,7 +9,7 @@
     android:targetCellWidth="4"
     android:targetCellHeight="2"
 
-    android:updatePeriodMillis="3600000"
+    android:updatePeriodMillis="450000"
 
     android:initialLayout="@layout/glance_default_loading_layout"
 

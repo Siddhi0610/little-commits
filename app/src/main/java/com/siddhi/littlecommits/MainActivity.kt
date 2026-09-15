@@ -3,7 +3,6 @@ package com.siddhi.littlecommits
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,21 +12,27 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.glance.appwidget.updateAll
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.siddhi.littlecommits.widget.LittleCommitsWidget
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -38,131 +43,149 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         setContent {
-            MaterialTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    LittleCommitsScreen()
-                }
-            }
+            LittleCommitsApp()
         }
     }
 }
 
 @androidx.compose.runtime.Composable
-fun LittleCommitsScreen() {
+fun LittleCommitsApp() {
 
     val db = remember {
         FirebaseFirestore.getInstance()
+    }
+
+    val context = LocalContext.current
+
+    val messages = remember {
+        mutableStateListOf<Message>()
     }
 
     var messageText by remember {
         mutableStateOf("")
     }
 
-    val messages = remember {
-        mutableStateListOf<Message>()
-    }
-
-    val today = SimpleDateFormat(
-        "MMMM dd, yyyy",
-        Locale.getDefault()
-    ).format(Date())
+    val scope = rememberCoroutineScope()
 
     /*
-     * Listen to Firestore.
-     *
-     * Whenever messages change in Firebase,
-     * this list automatically updates.
+     * Listen for changes in Firestore.
      */
-    DisposableEffect(Unit) {
+    LaunchedEffect(Unit) {
 
         val listener = db.collection("messages")
-            .orderBy("timestamp", Query.Direction.DESCENDING)
+            .orderBy(
+                "timestamp",
+                Query.Direction.DESCENDING
+            )
             .addSnapshotListener { snapshot, error ->
 
                 if (error != null) {
-
-                    println("FIREBASE ERROR: ${error.message}")
-
+                    error.printStackTrace()
                     return@addSnapshotListener
                 }
 
-                if (snapshot != null) {
+                val loadedMessages =
+                    snapshot?.documents?.mapNotNull { document ->
 
-                    println(
-                        "FIREBASE SUCCESS: ${snapshot.documents.size} documents"
-                    )
+                        val text = document.getString("text")
+                        val date = document.getString("date")
 
-                    messages.clear()
-
-                    for (document in snapshot.documents) {
-
-                        println(
-                            "DOCUMENT: ${document.data}"
-                        )
-
-                        val text = document.getString("text") ?: ""
-                        val date = document.getString("date") ?: ""
-
-                        messages.add(
+                        if (text != null && date != null) {
                             Message(
                                 text = text,
                                 date = date
                             )
-                        )
-                    }
-                }
+                        } else {
+                            null
+                        }
+                    } ?: emptyList()
+
+                messages.clear()
+                messages.addAll(loadedMessages)
             }
 
-        onDispose {
+        try {
+            awaitCancellation()
+        } finally {
             listener.remove()
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp)
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background
     ) {
 
-        Text(
-            text = "LITTLE COMMITS",
-            style = MaterialTheme.typography.headlineMedium
-        )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(20.dp)
+        ) {
 
-        Spacer(
-            modifier = Modifier.height(8.dp)
-        )
+            Text(
+                text = "Little Commits",
+                style = MaterialTheme.typography.headlineMedium
+            )
 
-        Text(
-            text = today,
-            style = MaterialTheme.typography.bodyLarge
-        )
+            Spacer(
+                modifier = Modifier.height(8.dp)
+            )
 
-        Spacer(
-            modifier = Modifier.height(24.dp)
-        )
+            Text(
+                text = "Every little message becomes a commit.",
+                style = MaterialTheme.typography.bodyMedium
+            )
 
-        OutlinedTextField(
-            value = messageText,
-            onValueChange = {
-                messageText = it
-            },
-            modifier = Modifier.fillMaxWidth(),
-            label = {
-                Text("Write something...")
-            }
-        )
+            Spacer(
+                modifier = Modifier.height(20.dp)
+            )
 
-        Spacer(
-            modifier = Modifier.height(12.dp)
-        )
+            /*
+             * Contribution graph
+             */
+            CommitGrid(
+                messages = messages
+            )
 
-        Button(
-            onClick = {
+            Spacer(
+                modifier = Modifier.height(24.dp)
+            )
 
-                if (messageText.isNotBlank()) {
+            /*
+             * Message input
+             */
+            OutlinedTextField(
+                value = messageText,
+                onValueChange = {
+                    messageText = it
+                },
+                modifier = Modifier.fillMaxWidth(),
+                label = {
+                    Text("Write a little commit")
+                },
+                placeholder = {
+                    Text("Something you want him to see...")
+                }
+            )
+
+            Spacer(
+                modifier = Modifier.height(12.dp)
+            )
+
+            /*
+             * Commit button
+             */
+            Button(
+                onClick = {
+
+                    if (messageText.isBlank()) {
+                        return@Button
+                    }
+
+                    val today = SimpleDateFormat(
+                        "MMMM dd, yyyy",
+                        Locale.getDefault()
+                    ).format(Date())
 
                     val newMessage = hashMapOf(
                         "text" to messageText,
@@ -170,66 +193,71 @@ fun LittleCommitsScreen() {
                         "timestamp" to System.currentTimeMillis()
                     )
 
-                    db.collection("messages")
-                        .add(newMessage)
+                    scope.launch {
 
-                    messageText = ""
-                }
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("COMMIT ♥")
-        }
+                        try {
 
-        Spacer(
-            modifier = Modifier.height(24.dp)
-        )
+                            /*
+                             * Save message to Firebase.
+                             */
+                            db.collection("messages")
+                                .add(newMessage)
+                                .await()
 
-        Text(
-            text = "Today's commits: ${
-                messages.count { it.date == today }
-            }",
-            style = MaterialTheme.typography.titleMedium
-        )
+                            /*
+                             * Clear input.
+                             */
+                            messageText = ""
 
-        Spacer(
-            modifier = Modifier.height(24.dp)
-        )
+                            /*
+                             * Update all Little Commits widgets
+                             * on this device.
+                             */
+                            LittleCommitsWidget()
+                                .updateAll(context)
 
-        // Contribution graph
-        CommitGrid(
-            messages = messages
-        )
+                        } catch (e: Exception) {
 
-        Spacer(
-            modifier = Modifier.height(24.dp)
-        )
+                            e.printStackTrace()
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
 
-        Text(
-            text = "All messages",
-            style = MaterialTheme.typography.titleMedium
-        )
+                Text("Commit")
+            }
 
-        Spacer(
-            modifier = Modifier.height(12.dp)
-        )
+            Spacer(
+                modifier = Modifier.height(20.dp)
+            )
 
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
+            Text(
+                text = "Recent commits",
+                style = MaterialTheme.typography.titleMedium
+            )
 
-            items(messages) { message ->
+            Spacer(
+                modifier = Modifier.height(8.dp)
+            )
 
-                Card(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+            /*
+             * Display messages.
+             */
+            LazyColumn(
+                modifier = Modifier.fillMaxSize()
+            ) {
+
+                items(messages) { message ->
 
                     Column(
-                        modifier = Modifier.padding(16.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp)
                     ) {
 
                         Text(
-                            text = "♥ ${message.text}",
+                            text = message.text,
                             style = MaterialTheme.typography.bodyLarge
                         )
 
