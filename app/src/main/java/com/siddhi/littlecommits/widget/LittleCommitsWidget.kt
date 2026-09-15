@@ -1,10 +1,13 @@
 package com.siddhi.littlecommits.widget
 
 import android.content.Context
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
+import androidx.glance.action.actionStartActivity
+import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
@@ -20,6 +23,8 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
+import com.siddhi.littlecommits.MainActivity
 import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -32,35 +37,40 @@ class LittleCommitsWidget : GlanceAppWidget() {
         id: GlanceId
     ) {
 
-        val db = FirebaseFirestore.getInstance()
+        val snapshot = FirebaseFirestore
+            .getInstance()
+            .collection("messages")
+            .orderBy(
+                "timestamp",
+                Query.Direction.ASCENDING
+            )
+            .get()
+            .await()
 
-        val messageDates = try {
+        val messageCounts = mutableMapOf<String, Int>()
 
-            db.collection("messages")
-                .get()
-                .await()
-                .documents
-                .mapNotNull { document ->
-                    document.getString("date")
-                }
+        snapshot.documents.forEach { document ->
 
-        } catch (e: Exception) {
+            val date = document.getString("date")
 
-            emptyList()
+            if (date != null) {
+                messageCounts[date] =
+                    (messageCounts[date] ?: 0) + 1
+            }
         }
 
         provideContent {
-
-            WidgetContent(
-                messageDates = messageDates
+            LittleCommitsWidgetContent(
+                messageCounts = messageCounts
             )
         }
     }
 }
 
-@androidx.compose.runtime.Composable
-fun WidgetContent(
-    messageDates: List<String>
+
+@Composable
+fun LittleCommitsWidgetContent(
+    messageCounts: Map<String, Int>
 ) {
 
     val dateFormat = SimpleDateFormat(
@@ -70,136 +80,168 @@ fun WidgetContent(
 
     val calendar = Calendar.getInstance()
 
-    calendar.set(
-        Calendar.DAY_OF_WEEK,
-        Calendar.SUNDAY
-    )
-
+    /*
+     * Start 12 weeks ago.
+     */
     calendar.add(
-        Calendar.WEEK_OF_YEAR,
-        -11
+        Calendar.DAY_OF_YEAR,
+        -(12 * 7 - 1)
     )
 
-    val weeks = mutableListOf<List<Int>>()
+    /*
+     * Create 12 weeks × 7 days.
+     */
+    val weeksData = List(12) {
 
-    repeat(12) {
-
-        val week = mutableListOf<Int>()
-
-        repeat(7) {
+        val week = List(7) {
 
             val date = dateFormat.format(
                 calendar.time
             )
 
-            val count = messageDates.count {
-                it == date
-            }
-
-            week.add(count)
+            val count =
+                messageCounts[date] ?: 0
 
             calendar.add(
                 Calendar.DAY_OF_YEAR,
                 1
             )
+
+            count
         }
 
-        weeks.add(week)
+        week
     }
 
     Column(
         modifier = GlanceModifier
             .fillMaxSize()
             .background(
-                ColorProvider(Color.White)
+                ColorProvider(
+                    Color(0xFF000000)
+                )
             )
-            .padding(12.dp),
-
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalAlignment = Alignment.CenterHorizontally
+            .clickable(
+                actionStartActivity<MainActivity>()
+            )
+            .padding(
+                horizontal = 8.dp,
+                vertical = 8.dp
+            ),
+        horizontalAlignment =
+            Alignment.CenterHorizontally
     ) {
 
         Text(
             text = "LITTLE COMMITS",
-
             style = TextStyle(
-                color = ColorProvider(Color.Black)
+                color = ColorProvider(
+                    Color.White
+                )
             )
         )
 
         Spacer(
-            modifier = GlanceModifier.size(10.dp)
+            modifier = GlanceModifier.size(8.dp)
         )
 
-        Row {
+        /*
+         * Fixed square size for now.
+         *
+         * 12 columns × 12dp
+         * + gaps
+         * fits comfortably inside the widget.
+         */
+        Row(
+            verticalAlignment =
+                Alignment.CenterVertically
+        ) {
 
-            weeks.forEach { week ->
+            weeksData.forEachIndexed { weekIndex, week ->
 
-                Column {
+                Column(
+                    horizontalAlignment =
+                        Alignment.CenterHorizontally
+                ) {
 
-                    week.forEach { count ->
+                    week.forEachIndexed { dayIndex, count ->
 
-                        WidgetCommitSquare(
+                        PinkSquare(
                             count = count
                         )
 
-                        Spacer(
-                            modifier = GlanceModifier.size(4.dp)
-                        )
+                        if (dayIndex < 6) {
+
+                            Spacer(
+                                modifier =
+                                    GlanceModifier.size(2.dp)
+                            )
+                        }
                     }
                 }
 
-                Spacer(
-                    modifier = GlanceModifier.size(4.dp)
-                )
+                if (weekIndex < 11) {
+
+                    Spacer(
+                        modifier =
+                            GlanceModifier.size(2.dp)
+                    )
+                }
             }
         }
 
         Spacer(
-            modifier = GlanceModifier.size(10.dp)
+            modifier = GlanceModifier.size(8.dp)
         )
 
         Text(
-            text = "Less        More",
-
+            text = "every day, a little something ♥",
             style = TextStyle(
-                color = ColorProvider(Color.DarkGray)
+                color = ColorProvider(
+                    Color(0xFFFF4F81)
+                )
             )
         )
     }
 }
 
-@androidx.compose.runtime.Composable
-fun WidgetCommitSquare(
+
+@Composable
+fun PinkSquare(
     count: Int
 ) {
 
     val color = when {
 
         count == 0 ->
-            Color(0xFFF5F5F5)
+            Color(0xFF1A1A1A)
 
         count == 1 ->
-            Color(0xFFFCE4EC)
+            Color(0xFFFFC1D1)
 
         count == 2 ->
-            Color(0xFFF8BBD0)
+            Color(0xFFFF7FA5)
 
         count == 3 ->
-            Color(0xFFF06292)
+            Color(0xFFFF3F78)
 
         else ->
-            Color(0xFFE91E63)
+            Color(0xFFFF0054)
     }
 
     Box(
         modifier = GlanceModifier
-            .size(16.dp)
+            .size(12.dp)
             .background(
                 ColorProvider(color)
             )
     ) {
-        // Empty content.
-        // The Box itself provides the colored square.
+
+        Text(
+            text = " ",
+            style = TextStyle(
+                color = ColorProvider(color)
+            )
+        )
     }
 }
