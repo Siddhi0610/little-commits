@@ -3,23 +3,20 @@ package com.siddhi.littlecommits.widget
 import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
-import androidx.glance.LocalSize
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
-import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
-import androidx.glance.layout.Spacer
+import androidx.glance.layout.fillMaxHeight
 import androidx.glance.layout.fillMaxSize
+import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.size
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
@@ -27,15 +24,11 @@ import androidx.glance.unit.ColorProvider
 import com.google.firebase.firestore.FirebaseFirestore
 import com.siddhi.littlecommits.MainActivity
 import kotlinx.coroutines.tasks.await
+import java.text.SimpleDateFormat
 import java.util.Calendar
-
+import java.util.Locale
 
 class LittleCommitsWidget : GlanceAppWidget() {
-
-    /*
-     * Use the actual size of the widget.
-     */
-    override val sizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(
         context: Context,
@@ -43,7 +36,7 @@ class LittleCommitsWidget : GlanceAppWidget() {
     ) {
 
         /*
-         * Read all messages from Firestore.
+         * Read the real messages from Firestore.
          */
         val snapshot = FirebaseFirestore
             .getInstance()
@@ -52,25 +45,20 @@ class LittleCommitsWidget : GlanceAppWidget() {
             .await()
 
         /*
-         * Count messages for each calendar day.
+         * Count messages for each date.
          */
         val messageCounts =
             mutableMapOf<String, Int>()
 
         snapshot.documents.forEach { document ->
 
-            /*
-             * Your MainActivity stores this:
-             *
-             * "date" -> "September 15, 2026"
-             */
-            val dateString =
+            val date =
                 document.getString("date")
 
-            if (dateString != null) {
+            if (date != null) {
 
-                messageCounts[dateString] =
-                    (messageCounts[dateString] ?: 0) + 1
+                messageCounts[date] =
+                    (messageCounts[date] ?: 0) + 1
             }
         }
 
@@ -90,74 +78,14 @@ fun LittleCommitsWidgetContent(
 ) {
 
     /*
-     * Actual dimensions supplied by the launcher.
-     */
-    val widgetWidth =
-        LocalSize.current.width
-
-    val widgetHeight =
-        LocalSize.current.height
-
-    /*
-     * GitHub-style graph.
-     *
-     * 18 columns = roughly 18 weeks
-     * 7 rows    = 7 days
+     * 18 weeks across.
+     * 7 days vertically.
      */
     val weeks = 18
     val days = 7
 
     /*
-     * Tiny spacing between squares.
-     */
-    val gap = 2.dp
-
-    /*
-     * Small outer margin.
-     */
-    val horizontalPadding = 4.dp
-    val verticalPadding = 5.dp
-
-    /*
-     * Calculate square size from WIDTH.
-     *
-     * This is the important part.
-     *
-     * 18 columns must collectively occupy
-     * almost the entire widget width.
-     */
-    val squareFromWidth =
-        (
-                widgetWidth
-                        - horizontalPadding * 2
-                        - gap * (weeks - 1)
-                ) / weeks
-
-    /*
-     * Calculate square size from HEIGHT.
-     *
-     * 7 rows must fit vertically too.
-     */
-    val squareFromHeight =
-        (
-                widgetHeight
-                        - verticalPadding * 2
-                        - gap * (days - 1)
-                ) / days
-
-    /*
-     * Use the smaller dimension so the
-     * complete graph always fits.
-     */
-    val squareSize =
-        minOf(
-            squareFromWidth,
-            squareFromHeight
-        )
-
-    /*
-     * Build the dates for the last
-     * 18 weeks.
+     * Start 18 weeks ago.
      */
     val calendar =
         Calendar.getInstance()
@@ -168,25 +96,20 @@ fun LittleCommitsWidgetContent(
     )
 
     /*
-     * IMPORTANT:
-     *
-     * This is exactly the same date format
-     * used by MainActivity when saving messages.
+     * EXACT same format used by MainActivity.
      */
     val dateFormat =
-        java.text.SimpleDateFormat(
+        SimpleDateFormat(
             "MMMM dd, yyyy",
-            java.util.Locale.getDefault()
+            Locale.getDefault()
         )
 
     /*
-     * Create:
+     * Build the graph data.
      *
-     * 18 columns
-     * ×
-     * 7 rows
+     * graph[week][day] = number of messages
      */
-    val weeksData =
+    val graph =
         List(weeks) {
 
             List(days) {
@@ -196,9 +119,6 @@ fun LittleCommitsWidgetContent(
                         calendar.time
                     )
 
-                /*
-                 * Get REAL message count.
-                 */
                 val count =
                     messageCounts[date] ?: 0
 
@@ -214,9 +134,12 @@ fun LittleCommitsWidgetContent(
     /*
      * Entire widget.
      *
-     * Tapping it opens MainActivity.
+     * No title.
+     * No footer.
+     * Black background.
+     * Entire widget is clickable.
      */
-    Row(
+    Column(
         modifier = GlanceModifier
             .fillMaxSize()
             .background(
@@ -226,137 +149,129 @@ fun LittleCommitsWidgetContent(
             )
             .clickable(
                 actionStartActivity<MainActivity>()
-            ),
-        horizontalAlignment =
-            Alignment.CenterHorizontally,
-        verticalAlignment =
-            Alignment.CenterVertically
+            )
     ) {
 
         /*
-         * Left padding.
+         * Seven rows.
+         *
+         * defaultWeight() works HERE because
+         * this Row is a child of Column.
+         *
+         * Each row receives equal height.
          */
-        Spacer(
-            modifier =
-                GlanceModifier.size(
-                    horizontalPadding
-                )
-        )
+        for (day in 0 until days) {
 
-        /*
-         * CONTRIBUTION GRAPH
-         */
-        weeksData.forEachIndexed { weekIndex, week ->
+            Row(
+                modifier =
+                    GlanceModifier
+                        .defaultWeight()
+                        .fillMaxWidth(),
 
-            Column(
                 horizontalAlignment =
-                    Alignment.CenterHorizontally
+                    Alignment.CenterHorizontally,
+
+                verticalAlignment =
+                    Alignment.CenterVertically
             ) {
 
-                week.forEachIndexed { dayIndex, count ->
+                /*
+                 * Eighteen squares across.
+                 *
+                 * IMPORTANT:
+                 *
+                 * defaultWeight() is used HERE,
+                 * inside RowScope.
+                 *
+                 * This is the part I got wrong
+                 * before.
+                 */
+                for (week in 0 until weeks) {
 
-                    PinkSquare(
-                        count = count,
-                        size = squareSize
+                    ContributionSquare(
+                        count = graph[week][day],
+
+                        modifier =
+                            GlanceModifier
+                                .defaultWeight()
+                                .fillMaxHeight()
                     )
-
-                    /*
-                     * Vertical spacing.
-                     */
-                    if (dayIndex < days - 1) {
-
-                        Spacer(
-                            modifier =
-                                GlanceModifier.size(gap)
-                        )
-                    }
                 }
             }
-
-            /*
-             * Horizontal spacing.
-             */
-            if (weekIndex < weeks - 1) {
-
-                Spacer(
-                    modifier =
-                        GlanceModifier.size(gap)
-                )
-            }
         }
-
-        /*
-         * Right padding.
-         */
-        Spacer(
-            modifier =
-                GlanceModifier.size(
-                    horizontalPadding
-                )
-        )
     }
 }
 
 
 @Composable
-fun PinkSquare(
+fun ContributionSquare(
     count: Int,
-    size: Dp
+    modifier: GlanceModifier
 ) {
 
     /*
-     * Contribution intensity.
+     * Black → pink contribution intensity.
      */
-    val color = when {
+    val squareColor =
+        when {
 
-        /*
-         * 0 messages
-         */
-        count == 0 ->
-            Color(0xFF202020)
+            /*
+             * 0 messages
+             */
+            count == 0 ->
+                Color(0xFF181818)
 
-        /*
-         * 1 message
-         */
-        count == 1 ->
-            Color(0xFFFFC7D6)
+            /*
+             * 1 message
+             */
+            count == 1 ->
+                Color(0xFFFFC7D6)
 
-        /*
-         * 2 messages
-         */
-        count == 2 ->
-            Color(0xFFFF8EAE)
+            /*
+             * 2 messages
+             */
+            count == 2 ->
+                Color(0xFFFF8EAE)
 
-        /*
-         * 3 messages
-         */
-        count == 3 ->
-            Color(0xFFFF4F81)
+            /*
+             * 3 messages
+             */
+            count == 3 ->
+                Color(0xFFFF4F81)
 
-        /*
-         * 4+ messages
-         */
-        else ->
-            Color(0xFFFF0054)
-    }
+            /*
+             * 4+ messages
+             */
+            else ->
+                Color(0xFFFF0054)
+        }
 
+    /*
+     * The modifier containing defaultWeight()
+     * comes from the RowScope at the call site.
+     */
     Box(
-        modifier = GlanceModifier
-            .size(size)
-            .background(
-                ColorProvider(color)
-            )
+        modifier =
+            modifier
+                .background(
+                    ColorProvider(
+                        squareColor
+                    )
+                )
     ) {
 
         /*
-         * Keeps the Box as an actual rendered
-         * widget element.
+         * Real content inside the Box.
          */
         Text(
             text = " ",
-            style = TextStyle(
-                color = ColorProvider(color)
-            )
+            style =
+                TextStyle(
+                    color =
+                        ColorProvider(
+                            squareColor
+                        )
+                )
         )
     }
 }
